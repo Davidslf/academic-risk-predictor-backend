@@ -1,0 +1,37 @@
+# ============================================================================
+# REQUISITOS DEL BACKEND - Sistema de Predicción de Riesgo Académico
+# Proyecto Final - Semestre 2025-II
+# ============================================================================
+
+# Framework Web (versiones compatibles con Python 3.13)
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+
+# Machine Learning y Análisis de Datos
+scikit-learn>=1.5.0
+pandas>=2.2.0
+numpy>=1.26.0
+joblib>=1.3.0
+
+# Validación de Datos
+pydantic>=2.10.0
+
+# CORS y Middleware
+python-multipart==0.0.6
+
+# Utilidades
+python-dotenv==1.0.0
+
+# ============================================================================
+# INSTALACIÓN:
+# pip install -r requirements.txt
+#
+# EJECUCIÓN:
+# python main.py
+# o
+# uvicorn main:app --reload --host 0.0.0.0 --port 8000
+#
+# NOTA: El sistema de análisis y consejos es completamente autónomo,
+# basado en reglas inteligentes y patrones. No requiere APIs externas.
+# ============================================================================
+
