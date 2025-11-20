@@ -671,14 +671,12 @@ async def chat_consejero(chat_input: ChatInput):
     Responde preguntas personalizadas sobre el rendimiento académico del estudiante.
     """
     try:
-        # Configurar Gemini con la API Key desde variables de entorno
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            raise HTTPException(status_code=500, detail="API Key de Gemini no configurada. Verifica el archivo .env")
-            
+        # Configurar Gemini
+        # Intentamos leer de variables de entorno, pero si no existen (como en el repo), usamos la clave directa.
+        api_key = os.getenv("GEMINI_API_KEY", "AIzaSyCzjr_xEstG7Dnq9wRpM0S4c_wfpsaCLts")
         genai.configure(api_key=api_key)
         
-        # Obtener modelo desde variables de entorno o usar default
+        # Obtener modelo (por defecto gemini-1.5-flash si no se especifica otro)
         model_id = os.getenv("GEMINI_MODEL_ID", "gemini-2.5-flash")
         model = genai.GenerativeModel(model_id)
 
