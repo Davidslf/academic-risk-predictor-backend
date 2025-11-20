@@ -15,6 +15,10 @@ import joblib
 import os
 from typing import Dict, List
 import google.generativeai as genai
+from dotenv import load_dotenv
+
+# Cargar variables de entorno desde .env
+load_dotenv()
 
 # ============================================================================
 # CONFIGURACIÓN DE LA APLICACIÓN
@@ -667,13 +671,16 @@ async def chat_consejero(chat_input: ChatInput):
     Responde preguntas personalizadas sobre el rendimiento académico del estudiante.
     """
     try:
-        # Configurar Gemini con la API Key proporcionada
-        # Nota: En producción es mejor usar variables de entorno
-        genai.configure(api_key="AIzaSyCzjr_xEstG7Dnq9wRpM0S4c_wfpsaCLts")
+        # Configurar Gemini con la API Key desde variables de entorno
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise HTTPException(status_code=500, detail="API Key de Gemini no configurada. Verifica el archivo .env")
+            
+        genai.configure(api_key=api_key)
         
-        # Usamos gemini-1.5-flash ya que es el modelo estándar actual para respuestas rápidas.
-        # Si se requiere específicamente otro, cambiar aquí.
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        # Obtener modelo desde variables de entorno o usar default
+        model_id = os.getenv("GEMINI_MODEL_ID", "gemini-2.5-flash")
+        model = genai.GenerativeModel(model_id)
 
         datos = chat_input.datos_estudiante
         prediccion = chat_input.prediccion_actual
