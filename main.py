@@ -14,6 +14,7 @@ from sklearn.preprocessing import StandardScaler
 import joblib
 import os
 from typing import Dict, List
+import google.generativeai as genai
 
 # ============================================================================
 # CONFIGURACIÓN DE LA APLICACIÓN
@@ -666,161 +667,53 @@ async def chat_consejero(chat_input: ChatInput):
     Responde preguntas personalizadas sobre el rendimiento académico del estudiante.
     """
     try:
-        pregunta = chat_input.pregunta.lower()
+        # Configurar Gemini con la API Key proporcionada
+        # Nota: En producción es mejor usar variables de entorno
+        genai.configure(api_key="AIzaSyCzjr_xEstG7Dnq9wRpM0S4c_wfpsaCLts")
+        
+        # Usamos gemini-1.5-flash ya que es el modelo estándar actual para respuestas rápidas.
+        # Si se requiere específicamente otro, cambiar aquí.
+        model = genai.GenerativeModel('gemini-2.5-flash')
+
         datos = chat_input.datos_estudiante
         prediccion = chat_input.prediccion_actual
+        pregunta = chat_input.pregunta
+
+        # Construir el contexto del estudiante para el prompt
+        contexto_estudiante = f"""
+        Datos del estudiante:
+        - Promedio Asistencia: {datos.promedio_asistencia}%
+        - Promedio Seguimiento: {datos.promedio_seguimiento}/5.0
+        - Nota Parcial 1: {datos.nota_parcial_1}/5.0
+        - Inicios de Sesión en Plataforma: {datos.inicios_sesion_plataforma}
+        - Uso de Tutorías: {datos.uso_tutorias}
+        """
         
-        # Analizar la pregunta y generar respuesta
-        respuesta = ""
-        
-        # Preguntas sobre cómo mejorar
-        if any(palabra in pregunta for palabra in ["mejorar", "mejor", "subir", "aumentar"]):
-            respuesta = f"""**💡 Cómo Mejorar Tu Rendimiento:**
+        if prediccion:
+             contexto_estudiante += f"\n- Riesgo de reprobación calculado previamente: {prediccion.get('porcentaje_riesgo', 'N/A')}%"
 
-Con tus datos actuales:
-• Asistencia: {datos.promedio_asistencia}%
-• Seguimiento: {datos.promedio_seguimiento}/5.0
-• Nota Parcial 1: {datos.nota_parcial_1}/5.0
-• Logins: {datos.inicios_sesion_plataforma}
-• Tutorías: {datos.uso_tutorias}
+        # Prompt para Gemini
+        prompt = f"""
+        Actúa como un consejero académico experto y amable. Tienes los siguientes datos de un estudiante:
+        {contexto_estudiante}
 
-**🎯 Áreas de Mejora:**
+        El estudiante te hace la siguiente pregunta: "{pregunta}"
 
-"""
-            # Analizar cada área
-            if datos.promedio_asistencia < 80:
-                respuesta += "• **Asistencia:** Intenta llegar al 90% o más. Cada clase perdida es conocimiento que no recuperas fácilmente.\n"
-            
-            if datos.promedio_seguimiento < 3.5:
-                respuesta += "• **Participación:** Participa más en clase, haz preguntas, completa tareas a tiempo.\n"
-            
-            if datos.nota_parcial_1 < 3.5:
-                respuesta += "• **Notas:** Dedica más tiempo al estudio. Forma grupos de estudio, usa recursos adicionales.\n"
-            
-            if datos.inicios_sesion_plataforma < 20:
-                respuesta += "• **Plataforma:** Ingresa más seguido (ideal: 3-4 veces por semana). Revisa materiales, foros, anuncios.\n"
-            
-            if datos.uso_tutorias < 3:
-                respuesta += "• **Tutorías:** ¡Úsalas! Son gratuitas y te ayudan mucho. Intenta al menos 3-5 sesiones.\n"
-                
-            respuesta += "\n**⭐ Recomendación Principal:** Enfócate primero en tu área más débil y luego avanza a las demás."
-        
-        # Preguntas sobre áreas débiles
-        elif any(palabra in pregunta for palabra in ["débil", "debil", "peor", "malo", "bajo", "baja"]):
-            areas_debiles = []
-            
-            if datos.promedio_asistencia < 75:
-                areas_debiles.append(("Asistencia", datos.promedio_asistencia, "%"))
-            if datos.promedio_seguimiento < 3.0:
-                areas_debiles.append(("Seguimiento", datos.promedio_seguimiento, "/5.0"))
-            if datos.nota_parcial_1 < 3.0:
-                areas_debiles.append(("Nota Parcial 1", datos.nota_parcial_1, "/5.0"))
-            if datos.inicios_sesion_plataforma < 15:
-                areas_debiles.append(("Uso de Plataforma", datos.inicios_sesion_plataforma, " logins"))
-            if datos.uso_tutorias < 2:
-                areas_debiles.append(("Uso de Tutorías", datos.uso_tutorias, " sesiones"))
-            
-            if areas_debiles:
-                respuesta = "**⚠️ Tus Áreas Más Débiles:**\n\n"
-                for i, (area, valor, unidad) in enumerate(areas_debiles, 1):
-                    respuesta += f"{i}. **{area}:** {valor}{unidad}\n"
-                respuesta += "\n💪 **Consejo:** Prioriza estas áreas en ese orden."
-            else:
-                respuesta = "**✅ ¡Excelente!** No tienes áreas particularmente débiles. Mantén tu buen desempeño en todas las áreas."
-        
-        # Preguntas sobre qué necesita para aprobar
-        elif any(palabra in pregunta for palabra in ["aprobar", "pasar", "necesito", "requiero"]):
-            if prediccion and prediccion.get("porcentaje_riesgo"):
-                riesgo = prediccion["porcentaje_riesgo"]
-                respuesta = f"""**📊 Análisis para Aprobar:**
+        Instrucciones estrictas:
+        1. Tu objetivo es ayudar al estudiante a mejorar su rendimiento académico basándote en sus datos.
+        2. SI LA PREGUNTA NO ESTÁ RELACIONADA con temas académicos, promedios, notas, estudio o la universidad, DEBES RESPONDER ÚNICAMENTE: "Únicamente puedo hablar de los promedios y temas académicos."
+        3. Si la pregunta requiere cálculos (ej. "¿cuánto necesito sacar para pasar?"), REALIZA LOS CÁLCULOS necesarios usando los datos proporcionados. Asume que la nota mínima para aprobar es 3.0.
+        4. Usa los datos del estudiante para personalizar tu respuesta.
+        5. Responde en formato Markdown limpio y claro.
+        6. Sé positivo y motivador en tu tono.
+        7. Limita tu respuesta a un máximo de 200 palabras.
+        """
 
-Tu riesgo actual de reprobación es: **{riesgo:.1f}%**
-
-"""
-                if riesgo < 30:
-                    respuesta += "✅ **Vas muy bien!** Con tu desempeño actual, tienes alta probabilidad de aprobar.\n\n**Recomendación:** Mantén tu nivel actual en todas las áreas."
-                elif riesgo < 50:
-                    respuesta += "⚠️ **Estás en la zona de riesgo medio.** Necesitas mejorar algunas áreas.\n\n**Para reducir tu riesgo:**\n"
-                    respuesta += "• Sube tu asistencia a 85%+\n"
-                    respuesta += "• Mejora tu nota del próximo parcial (objetivo: 3.5+)\n"
-                    respuesta += "• Aumenta tu participación y seguimiento\n"
-                else:
-                    respuesta += "🚨 **Riesgo alto.** Necesitas acción inmediata.\n\n**Plan de Acción Urgente:**\n"
-                    respuesta += "1. Habla con tu profesor HOY\n"
-                    respuesta += "2. Asiste a TODAS las clases restantes\n"
-                    respuesta += "3. Usa todas las tutorías disponibles\n"
-                    respuesta += "4. Forma un grupo de estudio\n"
-                    respuesta += "5. Dedica mínimo 2 horas diarias de estudio\n"
-            else:
-                respuesta = """**📝 Para Aprobar la Materia:**
-
-Generalmente necesitas:
-• **Asistencia:** Mínimo 80% (ideal: 90%+)
-• **Notas:** Promedio de 3.0 o superior
-• **Participación:** Activa y constante
-• **Uso de recursos:** Plataforma y tutorías
-
-💡 **Tip:** Haz una predicción primero para ver tu riesgo actual y obtener recomendaciones personalizadas."""
-        
-        # Preguntas sobre consejos generales
-        elif any(palabra in pregunta for palabra in ["consejo", "recomend", "ayuda", "sugerencia"]):
-            respuesta = f"""**🎓 Consejos Personalizados para Ti:**
-
-**📊 Tu Situación Actual:**
-• Asistencia: {datos.promedio_asistencia}% {'✅' if datos.promedio_asistencia >= 80 else '⚠️'}
-• Seguimiento: {datos.promedio_seguimiento}/5.0 {'✅' if datos.promedio_seguimiento >= 3.5 else '⚠️'}
-• Nota Parcial: {datos.nota_parcial_1}/5.0 {'✅' if datos.nota_parcial_1 >= 3.0 else '⚠️'}
-
-**💪 Consejos Específicos:**
-
-1. **Organízate:**
-   • Crea un horario semanal de estudio
-   • Dedica 1-2 horas diarias a esta materia
-   
-2. **Sé Constante:**
-   • Ingresa a la plataforma 3-4 veces por semana
-   • Revisa materiales antes y después de clase
-   
-3. **Busca Apoyo:**
-   • Forma grupos de estudio con compañeros
-   • Usa las tutorías (son gratis y efectivas)
-   
-4. **Participa Activamente:**
-   • Haz preguntas en clase
-   • Participa en foros y discusiones
-   
-5. **Prepárate Bien:**
-   • Estudia con anticipación para los exámenes
-   • Practica con ejercicios adicionales
-
-**🎯 Objetivo:** Mejorar un poco cada semana. ¡Los pequeños cambios generan grandes resultados!"""
-        
-        # Pregunta general o no reconocida
-        else:
-            respuesta = f"""**🤖 Consejero Académico Virtual**
-
-¡Hola! Estoy aquí para ayudarte a mejorar tu rendimiento académico.
-
-**Tus datos actuales:**
-• Asistencia: {datos.promedio_asistencia}%
-• Seguimiento: {datos.promedio_seguimiento}/5.0
-• Nota Parcial 1: {datos.nota_parcial_1}/5.0
-• Logins: {datos.inicios_sesion_plataforma}
-• Tutorías: {datos.uso_tutorias}
-
-**Puedes preguntarme:**
-• "¿Cómo puedo mejorar mi nota?"
-• "¿Cuál es mi área más débil?"
-• "¿Qué necesito para aprobar?"
-• "Dame consejos personalizados"
-• "¿Cómo usar las tutorías?"
-
-¿En qué más puedo ayudarte? 😊"""
-        
-        return {"respuesta": respuesta}
+        response = model.generate_content(prompt)
+        return {"respuesta": response.text}
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error procesando la pregunta: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error procesando la pregunta con Gemini: {str(e)}")
 
 
 if __name__ == "__main__":
